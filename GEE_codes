@@ -1,0 +1,18 @@
+var LC = ee.Image("users/farzadvahidimayamey/LC_swe_nmd2018bas_ogeneraliserad_v1_1"),
+    imageVisParam = {"opacity":1,"bands":["VV_filt"],"min":5,"max":20,"gamma":1},
+    imageVisParam2 = {"opacity":1,"bands":["VV_filt"],"min":5,"max":20,"gamma":1},
+    aoi = 
+    /* color: #d63000 */
+    /* shown: false */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[15.41704135869507, 59.725174856068705],
+          [15.41704135869507, 59.60449019434838],
+          [15.52965122197632, 59.60449019434838],
+          [15.52965122197632, 59.725174856068705]]], null, false),
+    table = ee.FeatureCollection("users/farzadvahidimayamey/ramsar_inland_exc_alp");
+    
