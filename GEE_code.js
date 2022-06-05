@@ -1,12 +1,15 @@
-var ID = 21;
+var ID = 436; // Wetland ID 
 var yer = 2020;
 var month_ = 6;
-var day1 = 22;
-var day2 = 28;
+// day1 and day2 specifies the 6-day period
+var day1 = 18;
+var day2 = 24;
 var bnd = 'VV_filt'
 var orbit = 'ASCENDING'
 Map.centerObject(aoi,10)
-//Map.addLayer(LC.randomVisualizer().clip(aoi), { min: 0, max: 255}, 'landcover');
+
+// LC is 10m high-resolution national land cover of Sweden
+//relevant classess has been extracted for further analysis
 var LC = ee.Image(0).where(
   LC.eq(2)
     .or(LC.eq(121))
@@ -21,12 +24,7 @@ var LC = ee.Image(0).where(
               .or(LC.eq(62))
     , 1)
 
-function powerToDb(img){
-  return ee.Image(10).multiply(img.log10());
-}
-function dbToPower(img){
-  return ee.Image(10).pow(img.divide(10));
-}
+// PeronaMalikFilter (https://mygeoblog.com/2021/01/22/perona-malik-filter/)
 function PeronaMalikFilter(img) {
   
   var K = 3.5;
@@ -86,7 +84,7 @@ function PeronaMalikFilter(img) {
 
   return img;
 }
-/////////////////////////////////////////////////////////////////////////////
+
 // Apply angle correction (for VV and VH)
 function toGammaVV(image) {
       return image.addBands(image.select('VV').subtract(image.select('angle')
@@ -96,27 +94,21 @@ function toGammaVH(image) {
       return image.addBands(image.select('VH').subtract(image.select('angle')
         .multiply(Math.PI/180.0).cos().log10().multiply(10.0)).rename('VH_corr'));
     }
-////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////
+// table contains wetland shape files
 var RMS = table.filterBounds(aoi).geometry();
-// //SRTM DEM
-// var dataset = ee.Image('USGS/SRTMGL1_003').clip(aoi);
-// var elevation = dataset.select('elevation');
-// var slope = ee.Terrain.slope(elevation);
-// Map.addLayer(slope, {min: 0, max: 40}, 'slope');
-//Load Sentinel1 images
+
+//Loading Sentinel1 images
 var S1 = ee.ImageCollection('COPERNICUS/S1_GRD')
     .filter(ee.Filter.eq('instrumentMode', 'IW'))
     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
     .filter(ee.Filter.calendarRange(yer,yer,'year'))
-//    .filter(ee.Filter.calendarRange(month_,month_,'month'))
-//    .filter(ee.Filter.calendarRange(day1,day2,'day_of_month'))
-    .filter(ee.Filter.calendarRange(150,156,'day_of_year'))
+    .filter(ee.Filter.calendarRange(month_,month_,'month'))
+    .filter(ee.Filter.calendarRange(day1,day2,'day_of_month'))
+//    .filter(ee.Filter.calendarRange(152,158,'day_of_year'))
     .filter(ee.Filter.eq('orbitProperties_pass', orbit)) //Filter to get images from different look angles
     .filter(ee.Filter.contains({leftField: ".geo", rightValue: RMS}))
-    .filterBounds(aoi)
-    
+    .filterBounds(aoi)  
 print(S1,'S1')
 
 //Applying filters 
@@ -127,11 +119,15 @@ var S1 = S1.map(toGammaVV)
     .select(['VV_corr','VH_corr']).rename(['VV_filt','VH_filt'])
 
 Map.addLayer(S1.select('VV_filt').clip(aoi),{min: -30, max: 5},'S1_VV');
-// Map.addLayer(S1.select('VH_filt').clip(aoi),{min: -30, max: 5},'S1_VH');
-//Map.addLayer(S1.select('VH_filt').clip(aoi),{min: -30, max: 5},'S1_VH');
-//creat vv-vh
+
+//creating vv-vh
 var vv_vh = S1.select('VV_filt').subtract(S1.select('VH_filt')).clip(aoi)
-Map.addLayer(vv_vh,{min: 10, max: 20},'vv-vh');
+Map.addLayer(vv_vh,{min: 5, max: 15},'vv-vh');
+
+// CC is Interferometric coherence layer
+var CC = CC.double()
+Map.addLayer(CC,{min: 0.5, max: 1}, 'coherence')
+print(CC,'coherence')
 
 // sentinel2 image
 function maskS2clouds(image) {
@@ -148,19 +144,18 @@ function maskS2clouds(image) {
 var s2 = ee.ImageCollection("COPERNICUS/S2")
           .filterBounds(aoi)
           .filter(ee.Filter.calendarRange(yer,yer,'year'))
-//          .filter(ee.Filter.calendarRange(month_,month_,'month'))
-//          .filter(ee.Filter.calendarRange(day1,day2,'day_of_month'))
-          .filter(ee.Filter.calendarRange(150,156,'day_of_year'))
-          .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',1))
+          .filter(ee.Filter.calendarRange(month_,month_,'month'))
+          .filter(ee.Filter.calendarRange(day1,day2,'day_of_month'))
+//          .filter(ee.Filter.calendarRange(152,158,'day_of_year'))
+          .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',5))
           .map(maskS2clouds)
           
-
 var s2_lay = s2.mean()
           .clip(aoi)
 var rgbVis = {min: 0.0, max: 0.3 , bands: ['B4', 'B3', 'B2']};
 print(s2)
 Map.addLayer(s2_lay, rgbVis, 's2');
-
+// ndvi layer is created to help vegetation detection
 var ndvi = s2.map(function(img){
             return img.normalizedDifference(['B8','B4']).rename('ndvi');
           })
@@ -171,25 +166,13 @@ var ndviViz = {min: -1, max: 1, palette: ['blue', 'white', 'green']};
 var ndvi = ndvi.toDouble()
 Map.addLayer(ndvi, ndviViz, 'NDVI');
 
-var ndwi = s2.map(function(img){
-            return img.normalizedDifference(['B3','B8']).rename('ndwi');
-          })
-          .mean()
-          .clip(aoi)
-        
-var ndwiViz = {min: -1, max: 1, palette: ['00FFFF', '0000FF']};
-var ndwi = ndwi.toDouble()
-//Map.addLayer(ndwi, ndwiViz, 'NDWI');
-
-
-
-
-//Map.addLayer(water.selfMask(), {palette: 'Blue'}, 'Surface Water');
 var blank = ee.Image.constant(0)
 print(blank)
+
 // classification
-var input = S1.select('VV_filt').addBands(ndvi).addBands(vv_vh)//.addBands(slope)//.addBands(LC)//.addBands(S1.select('VV_filt'))
+var input = S1.select('VV_filt').addBands(ndvi).addBands(vv_vh).addBands(CC)
 print(input,'input')
+
 // Define the visualization parameters.
 var vizParams = {
   bands: ['VV_filt', 'ndvi','VV_filt_1'],
@@ -219,10 +202,12 @@ var result = input.cluster(clusterer).clip(aoi);
 // Display the clusters with random colors.
 Map.addLayer(result.randomVisualizer(), {}, 'clusters_cc');
 
+//manually grouping pixels into four classes
 var reclassified = ee.Image(0)
-.where(result.eq(11), 1)
- .where(result.eq(13), 2)
-    .where(result.eq(2), 3)
+.where(result.eq(13), 1)
+ .where(result.eq(10), 2)
+    .where(result.eq(1), 3)
+      .where(result.eq(0), 4)
     .clip(aoi);
     
 var final = reclassified.mask(LC).unmask(0)
@@ -245,4 +230,3 @@ Export.image.toDrive({
   fileNamePrefix: ID+'_final_'+yer+'_'+month_+'_'+day1+'_'+day2
   
 })
-
