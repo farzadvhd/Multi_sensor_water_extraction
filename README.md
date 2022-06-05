@@ -4,4 +4,4 @@ Advances in remote sensing technologies helped us to improve the monitoring of t
 ### External layers
 - Wetlands' shape files
 - 10m high-resolution national land cover of Sweden
-- Interferometric coherence layer (processed by ENVI SARscape)
+- Interferometric coherence layers (processed by ENVI SARscape)
